@@ -35,18 +35,23 @@ class TrajectoryGenerator:
             final_angles (list of float): Final angles of the joints.
 
         Returns:
-            tuple: Lists of times, positions, velocities, accelerations for all joints,
-                   and a list of joint names.
+            tuple: NumPy arrays of times, positions, velocities, accelerations for all joints,
+                and a list of joint names.
         """
-        times, positions, velocities, accelerations = [], [], [], []
-        joint_names = [f"Joint {i + 1}" for i in range(len(joint_angles))]
+        num_joints = len(joint_angles)
+        num_points = self.num_points
+        times = np.zeros((num_joints, num_points))
+        positions = np.zeros((num_joints, num_points))
+        velocities = np.zeros((num_joints, num_points))
+        accelerations = np.zeros((num_joints, num_points))
+        joint_names = [f"Joint {i + 1}" for i in range(num_joints)]
 
-        for q0, qT in zip(joint_angles, final_angles):
+        for i, (q0, qT) in enumerate(zip(joint_angles, final_angles)):
             t, q, dq, ddq = self.quintic_trajectory(q0, qT)
-            times.append(t)
-            positions.append(q)
-            velocities.append(dq)
-            accelerations.append(ddq)
+            times[i, :] = t
+            positions[i, :] = q
+            velocities[i, :] = dq
+            accelerations[i, :] = ddq
 
         return times, positions, velocities, accelerations, joint_names
 
