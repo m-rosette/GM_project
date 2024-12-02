@@ -44,5 +44,7 @@ class KinematicChain:
         for l in self.link_positions:
             x.append(l.value[0])
             y.append(l.value[1])
-        ax.plot(x, y, marker="o", linestyle="-", color=color)
+        line = ax.plot(x, y, marker="o", linestyle="-", color=color)
         ax.set_aspect("equal")
+        
+        return line
