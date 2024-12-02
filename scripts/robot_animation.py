@@ -75,8 +75,8 @@ class RobotAnimation:
         self.passive_chain.set_configuration(self.passive_trajectory[:,i])
         lines.append(self.passive_chain.draw(self.ax[0], color=COLOR["teal"])[0])
         
-        self.ax[0].set_xlim([0,6])
-        self.ax[0].set_ylim([0,6])
+        self.ax[0].set_xlim([-3,3])
+        self.ax[0].set_ylim([-3,3])
         
         for j in range(self.dof):
             self.ax[j+1].clear()
@@ -97,10 +97,14 @@ if __name__ == "__main__":
 
     # Create a kinematic chain
     kc1 = DiffKinematicChain(links1, joint_axes1)
+    
+    # Create another kinematic chain
+    T_controlled = G.element([3, 0, np.pi])
     kc2 = DiffKinematicChain(links1, joint_axes1)
+    kc2.set_base_transform(T_controlled)
 
     robo_animator = RobotAnimation(kc1, kc2, 10, 200, [0.0,0.0,0.0], [.25 * np.pi, -.5 * np.pi, .75 * np.pi])
     
     ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=200, interval=20, blit=True)
     plt.show()
-    ani.save("first_animation_test.gif",fps=20)
+    ani.save("test_base_transform.gif",fps=20)
