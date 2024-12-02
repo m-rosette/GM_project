@@ -49,6 +49,9 @@ class RobotAnimation:
 
         self.times = self.times[0]
         
+        self.v_E_passive = self.passive_chain.traj_to_v(self.passive_trajectory, self.passive_alpha_dot)
+        self.active_trajectory = self.active_chain.v_to_traj(self.times, self.v_E_passive)
+        
     def create_subplots(self):
         
         axes = []
@@ -74,9 +77,11 @@ class RobotAnimation:
         self.ax[0].clear()
         self.passive_chain.set_configuration(self.passive_trajectory[:,i])
         lines.append(self.passive_chain.draw(self.ax[0], color=COLOR["teal"])[0])
+        self.active_chain.set_configuration(self.active_trajectory[:,i])
+        lines.append(self.active_chain.draw(self.ax[0], color=COLOR["salmon"])[0])
         
-        self.ax[0].set_xlim([-3,3])
-        self.ax[0].set_ylim([-3,3])
+        self.ax[0].set_xlim([-6,6])
+        self.ax[0].set_ylim([-6,6])
         
         for j in range(self.dof):
             self.ax[j+1].clear()
@@ -103,8 +108,10 @@ if __name__ == "__main__":
     kc2 = DiffKinematicChain(links1, joint_axes1)
     kc2.set_base_transform(T_controlled)
 
+
+    
     robo_animator = RobotAnimation(kc1, kc2, 10, 200, [0.0,0.0,0.0], [.25 * np.pi, -.5 * np.pi, .75 * np.pi])
     
     ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=200, interval=20, blit=True)
     plt.show()
-    ani.save("test_base_transform.gif",fps=20)
+    ani.save("test_IK.gif",fps=20)

@@ -5,6 +5,7 @@ from geomotion import (utilityfunctions as ut, rigidbody as rb)
 import numpy as np
 import kinematic_chain as kc
 from matplotlib import pyplot as plt
+from scipy import integrate
 
 # Set the group as SE2 from rigidbody
 G = rb.SE2
@@ -91,6 +92,39 @@ class DiffKinematicChain(kc.KinematicChain):
             joint_velocities = np.matmul(J_inv, element.value.transpose())
             
         return joint_velocities
+    
+    def traj_to_v(self, positions, velocities):
+        
+        n = velocities.shape[1]
+        v = np.zeros([3,n])
+        
+        for i in range(n):
+            self.set_configuration(positions[:,i])
+            J = self.Jacobian_Ad(self.dof, 'world')
+            alpha_dot = velocities[:,i]
+            v[:,i] = np.matmul(J, alpha_dot)
+        
+        return v
+    
+    def v_to_traj(self, times, v):
+        
+        n = times.shape[0]
+        velocities = np.zeros([3,n])
+        positions = np.zeros([self.dof,n])
+        
+        for i in range(n):
+            
+            alpha_dot = self.IK(G.element(v[:,i]))
+            velocities[:,i] = alpha_dot
+        
+        for i in range(self.dof):
+            alpha_int = integrate.cumulative_trapezoid(velocities[i,:], x=times, initial=0)
+            #alpha_int = np.insert(alpha_int, 0,  0.0)
+            
+            positions[i,:] = alpha_int
+        
+        return positions
+    
     
 if __name__ == "__main__":
     # Create a list of three links, all extending in the x direction with different lengths
