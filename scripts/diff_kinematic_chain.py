@@ -116,12 +116,14 @@ class DiffKinematicChain(kc.KinematicChain):
             
             alpha_dot = self.IK(G.element(v[:,i]))
             velocities[:,i] = alpha_dot
-        
-        for i in range(self.dof):
-            alpha_int = integrate.cumulative_trapezoid(velocities[i,:], x=times, initial=0)
-            #alpha_int = np.insert(alpha_int, 0,  0.0)
             
-            positions[i,:] = alpha_int
+            if i > 0:
+                dt = times[i] - times[i-1]
+                positions[:,i] = bound_to_pi(positions[:,i-1] + dt * alpha_dot)
+            else:
+                positions[:,i] = bound_to_pi(np.array(self.joint_angles))
+                
+            self.set_configuration(positions[:,i])
         
         return positions
     
