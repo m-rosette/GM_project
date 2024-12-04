@@ -17,7 +17,8 @@ class ForceKinematicChain(DiffKinematicChain):
                  links,
                  joint_axes,
                  stiffnesses = None,
-                 damping = None):
+                 damping = None,
+                 start_config = None):
 
         """Initialize a kinematic chain augmented with Jacobian methods"""
 
@@ -26,10 +27,30 @@ class ForceKinematicChain(DiffKinematicChain):
         
         self.stiffnesses = np.array(stiffnesses) if stiffnesses else np.zeros(len(joint_axes))
         self.damping = np.array(damping) if damping else np.zeros(len(joint_axes))
+
+        self.start_config = start_config
     
     def response_forces(self, F_E):
         F_alpha = np.matmul(F_E, self.Jacobian_Ad_inv(self.dof, 'world'))    
         return (F_alpha)
+    
+    def response_forces_with_dynamics(self, F_E, desired_config, joint_vel):
+        """
+        Map the end-effector force F_E to joint torques while considering the system's
+        stiffness and damping reaction forces.
+        """
+        # Inverse dynamics to compute joint space forces from end-effector force
+        F_alpha = np.matmul(F_E, self.Jacobian_Ad_inv(self.dof, 'world'))
+
+        # Reaction forces due to deviation from the current joint configuration
+        configuration_deviation = -self.stiffnesses * (desired_config - self.start_config)
+        damping_reaction = -self.damping * joint_vel
+
+        # Total reaction force: static (stiffness) + dynamic (damping)
+        joint_reactions = configuration_deviation + damping_reaction
+
+        # Combine the joint reaction forces with external forces
+        return F_alpha + joint_reactions
         
     def compute_joint_torques(self, desired_angles, joint_velocities):
         """
@@ -61,13 +82,123 @@ class ForceKinematicChain(DiffKinematicChain):
     
     def equilibrium_end_effector_force(self, desired_angles, joint_velocities):
         """
-        Compute the end-effector force required to conform the chain to the desired configuration.
+        Compute the total force at the end effector considering both the control
+        and the system's resistance to configuration changes.
         """
+        # Control torques
         joint_torques = self.compute_joint_torques(desired_angles, joint_velocities)
-        J_transpose = self.Jacobian_Ad_inv(self.dof, 'world').T
-        F_end_effector = np.linalg.pinv(J_transpose) @ joint_torques
+        
+        # Reaction forces (stiffness and damping)
+        reaction_forces = self.response_forces_with_dynamics(np.zeros_like(joint_torques), desired_angles, joint_velocities)
+        
+        # Total joint torques (control + reaction)
+        total_joint_torques = joint_torques + reaction_forces
+
+        # Compute the Jacobian at the current configuration
+        J_inv = np.linalg.pinv(self.Jacobian_Ad_inv(self.dof, 'world'))
+        
+        # Optional Regularization Step (if needed for ill-conditioned Jacobian)
+        epsilon = 1e-6  # Regularization parameter
+        J_regularized = np.linalg.pinv(J_inv @ J_inv.T + epsilon * np.eye(J_inv.shape[1])) @ J_inv
+
+        # Compute end-effector force using the regularized Jacobian
+        F_end_effector = J_regularized @ total_joint_torques
         return F_end_effector
     
+    def calculate_end_effector_forces_over_trajectory(self, trajectory, joint_velocities):
+        """
+        Calculate the resultant end-effector forces along a kinematic chain trajectory.
+        
+        Args:
+            trajectory (numpy.ndarray): Joint angle configurations over time (shape: dof x n_frames).
+            joint_velocities (numpy.ndarray): Joint velocities over time (shape: dof x n_frames).
+            
+        Returns:
+            numpy.ndarray: End-effector forces at each time step (shape: 3 x n_frames for 3D force vectors).
+        """
+        n_frames = trajectory.shape[1]
+        end_effector_forces = np.zeros((3, n_frames))  # Assuming 3D forces
+
+        for i in range(n_frames):
+            # Set the chain to the current configuration
+            self.set_configuration(trajectory[:, i])
+            
+            # Compute the end-effector force
+            F_end_effector = self.equilibrium_end_effector_force(
+                desired_angles=trajectory[:, i],
+                joint_velocities=joint_velocities[:, i]
+            )
+            
+            # Store the result
+            end_effector_forces[:, i] = F_end_effector
+
+        return end_effector_forces
+    
+
+    
+    def compute_joint_torques_from_forces(self, end_effector_forces):
+        """
+        Compute joint torques to recreate specified end-effector forces.
+        
+        Args:
+            end_effector_forces (numpy.ndarray): Desired forces at the end-effector.
+
+        Returns:
+            numpy.ndarray: Joint torques to recreate the forces.
+        """
+        J = self.Jacobian_Ad_inv(self.dof, 'world')  # Jacobian for current configuration
+        J_transpose = J.T
+        joint_torques = J_transpose @ end_effector_forces
+        return joint_torques
+    
+    def compute_joint_torques_for_trajectory(self, end_effector_trajectory, joint_trajectory):
+        """
+        Compute joint torques over a trajectory.
+
+        Args:
+            end_effector_trajectory (list): Desired end-effector forces/positions as an array of arrays.
+            joint_trajectory (list): Corresponding joint configurations.
+
+        Returns:
+            numpy.ndarray: Joint torques over the trajectory.
+        """
+        num_steps = len(end_effector_trajectory)
+        joint_torques_trajectory = []
+
+        for i in range(num_steps):
+            # Set the current configuration
+            self.set_configuration(joint_trajectory[i])
+            # Compute joint torques for the given end-effector forces
+            torques = self.compute_joint_torques_from_forces(end_effector_trajectory[i])
+            joint_torques_trajectory.append(torques)
+
+        return np.array(joint_torques_trajectory)
+
+    def compute_inverse_dynamics_torques(self, end_effector_positions, end_effector_velocities, end_effector_forces):
+        """
+        Compute the required joint torques for a trajectory of desired end-effector positions and forces.
+        
+        Args:
+            end_effector_positions (list): Desired positions of the end-effector.
+            end_effector_velocities (list): Desired velocities of the end-effector.
+            end_effector_forces (list): Desired forces at the end-effector.
+
+        Returns:
+            numpy.ndarray: Joint torques over the trajectory.
+        """
+        num_steps = len(end_effector_positions)
+        joint_torques = []
+
+        for i in range(num_steps):
+            # Calculate the current joint angles using inverse kinematics
+            current_angles = self.inverse_kinematics(end_effector_positions[i])
+            self.set_configuration(current_angles)
+            # Map end-effector forces to joint torques
+            torques = self.compute_joint_torques_from_forces(end_effector_forces[i])
+            joint_torques.append(torques)
+
+        return np.array(joint_torques)
+
     
 if __name__ == "__main__":
     # Create a list of three links, all extending in the x direction with different lengths

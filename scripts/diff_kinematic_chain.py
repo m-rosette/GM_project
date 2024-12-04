@@ -2,6 +2,8 @@ import sys
 sys.path.append('../')
 from geomotion import (utilityfunctions as ut, rigidbody as rb)
 
+from scipy.integrate import cumulative_trapezoid
+
 import numpy as np
 import kinematic_chain as kc
 from matplotlib import pyplot as plt
@@ -90,7 +92,6 @@ class DiffKinematicChain(kc.KinematicChain):
         else:
             J_inv = np.linalg.pinv(self.Jacobian_Ad_inv(self.dof, 'world'))
             joint_velocities = np.matmul(J_inv, element.value.transpose())
-            
         return joint_velocities
     
     def traj_to_v(self, positions, velocities):
@@ -100,31 +101,35 @@ class DiffKinematicChain(kc.KinematicChain):
         
         for i in range(n):
             self.set_configuration(positions[:,i])
-            J = self.Jacobian_Ad(self.dof, 'world')
+            J = self.Jacobian_Ad_inv(self.dof, 'world')
             alpha_dot = velocities[:,i]
             v[:,i] = np.matmul(J, alpha_dot)
         
         return v
     
-    def v_to_traj(self, times, v):
+    def v_to_traj(self, times, initial_config, v):
         
         n = times.shape[0]
         velocities = np.zeros([3,n])
         positions = np.zeros([self.dof,n])
         
-        for i in range(n):
+        # Initialize the starting configuration
+        positions[:, 0] = np.array(initial_config)
+        self.set_configuration(positions[:, 0])
+
+        for i in range(1, n):
+            dt = times[i] - times[i - 1]  # Time step
             
-            alpha_dot = self.IK(G.element(v[:,i]))
-            velocities[:,i] = alpha_dot
-            
-            if i > 0:
-                dt = times[i] - times[i-1]
-                positions[:,i] = bound_to_pi(positions[:,i-1] + dt * alpha_dot)
-            else:
-                positions[:,i] = bound_to_pi(np.array(self.joint_angles))
-                
-            self.set_configuration(positions[:,i])
-        
+            # Compute joint velocities using IK
+            alpha_dot = self.IK(G.element(v[:, i]))
+            velocities[:, i] = alpha_dot
+
+            for j in range(self.dof):
+                    positions[j,i] = positions[j,i-1] + integrate.simpson([0,alpha_dot[j]],x=[0,dt])
+
+            # Update configuration dependency for IK
+            self.set_configuration(positions[:, i])
+
         return positions
     
     

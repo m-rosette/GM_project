@@ -7,6 +7,7 @@ Created on Sun Dec  1 11:30:55 2024
 
 from diff_kinematic_chain import DiffKinematicChain
 from traj_gen import TrajectoryGenerator
+from force_kinematic_chain import ForceKinematicChain
 
 import numpy as np
 import matplotlib
@@ -31,7 +32,7 @@ COLOR = {
 
 class RobotAnimation:
     
-    def __init__(self, active_chain, passive_chain, duration, n_frames, start_config, end_config):
+    def __init__(self, active_chain, passive_chain, duration, n_frames, start_config_passive, end_config, start_config_active):
         
         self.active_chain = active_chain
         self.passive_chain = passive_chain
@@ -39,9 +40,12 @@ class RobotAnimation:
         self.traj_generator = TrajectoryGenerator(duration=duration,num_points=n_frames)
         
         self.times, self.passive_trajectory, self.passive_alpha_dot, _, _ = \
-        self.traj_generator.generate_joint_trajectories(start_config, end_config)
+            self.traj_generator.generate_joint_trajectories(start_config_passive, end_config)
         
-        self.dof = len(start_config)
+        self.passive_end_effector_forces = self.passive_chain.calculate_end_effector_forces_over_trajectory( \
+            self.passive_trajectory, self.passive_alpha_dot)
+        
+        self.dof = len(start_config_passive)
         self.n_frames = n_frames
         
         self.fig = plt.figure()
@@ -50,7 +54,7 @@ class RobotAnimation:
         self.times = self.times[0]
         
         self.v_E_passive = self.passive_chain.traj_to_v(self.passive_trajectory, self.passive_alpha_dot)
-        self.active_trajectory = self.active_chain.v_to_traj(self.times, self.v_E_passive)
+        self.active_trajectory = self.active_chain.v_to_traj(self.times, start_config_active, self.v_E_passive)
         
     def create_subplots(self):
         
@@ -82,7 +86,31 @@ class RobotAnimation:
         
         self.ax[0].set_xlim([-6,6])
         self.ax[0].set_ylim([-6,6])
+
+        # Add force arrows for passive chain
+        end_effector_position = self.passive_chain.link_positions[-1].value[:2]
+        force_vector = self.passive_end_effector_forces[:, i]
         
+        # Colors and components for x and y components
+        components = [("x", force_vector[0], 0, "red"), ("y", 0, force_vector[1], "green")]
+        
+        # Loop through the components and plot arrows
+        for comp_name, force_x, force_y, color in components:
+            arrow = self.ax[0].quiver(
+                end_effector_position[0],  # Base x position
+                end_effector_position[1],  # Base y position
+                force_x,                   # x-component of force (for 'x' or 'y' direction)
+                force_y,                   # y-component of force (for 'x' or 'y' direction)
+                color=color,
+                scale=50,  # Adjust as needed
+                label=f"Force {comp_name}",
+            )
+            lines.append(arrow)
+
+        # Add a legend to show force component labels
+        self.ax[0].legend(loc="upper right") 
+    
+        # Update the joint plots
         for j in range(self.dof):
             self.ax[j+1].clear()
             lines.append(self.ax[j+1].plot(self.times, self.passive_trajectory[j,:],
@@ -95,23 +123,35 @@ class RobotAnimation:
             
 if __name__ == "__main__":
     # Create a list of three links, all extending in the x direction with different lengths
-    links1 = [G.element([3, 0, 0]), G.element([2, 0, 0]), G.element([1, 0, 0])]
+    links1 = [G.element([1, 0, 0]), G.element([1, 0, 0]), G.element([1, 0, 0])]
 
     # Create a list of three joint axes, all in the rotational direction
     joint_axes1 = [G.Lie_alg_vector([0, 0, 1])] * 3
 
-    # Create a kinematic chain
-    kc1 = DiffKinematicChain(links1, joint_axes1)
+    # Stiffness and damping for each joint
+    stiffnesses = [5, 5, 5]
+    damping = [0.1, 0.1, 0.1]
+
+    # Create the controllable kinematic chain
+    # kc1 = DiffKinematicChain(links1, joint_axes1)
+    # start_config_active = [np.pi/6, np.pi/6, np.pi/6]
+    start_config_active = [np.pi/4, np.pi/2, np.pi/4]
+    kc1 = ForceKinematicChain(links1, joint_axes1)
+    kc1.set_configuration(start_config_active)
+    active_base_offset = G.element([2.1, 0, 0])
+    kc1.set_base_transform(active_base_offset)
     
     # Create another kinematic chain
-    T_controlled = G.element([3, 0, np.pi])
-    kc2 = DiffKinematicChain(links1, joint_axes1)
-    kc2.set_base_transform(T_controlled)
+    # kc2 = DiffKinematicChain(links1, joint_axes1)
+    # start_config_passive = [np.pi/6, np.pi/6, np.pi/6]
+    # desired_config_passive = [np.pi/3, np.pi/4, np.pi/4]
+    start_config_passive = [3*np.pi/4, -np.pi/2, -np.pi/4]
+    desired_config_passive = [np.pi/2, -np.pi/4, -np.pi/4]
+    kc2 = ForceKinematicChain(links1, joint_axes1, stiffnesses, damping, start_config_passive)
+    kc2.set_configuration(start_config_passive)
 
-
+    robo_animator = RobotAnimation(kc1, kc2, 5, 30, start_config_passive, desired_config_passive, start_config_active)
     
-    robo_animator = RobotAnimation(kc1, kc2, 10, 200, [0.0,0.0,0.0], [.25 * np.pi, -.5 * np.pi, .75 * np.pi])
-    
-    ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=200, interval=20, blit=True)
-    plt.show()
+    ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=30, interval=20, blit=True)
+    # plt.show()
     ani.save("test_IK.gif",fps=20)
