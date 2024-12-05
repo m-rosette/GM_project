@@ -67,26 +67,27 @@ class TrajectoryGenerator:
             joint_names (list of str): List of names for each joint.
         """
         fig, axs = plt.subplots(3, 1, figsize=(8, 10))
+        plt.rcParams.update({'font.size': 12})
 
         # Plot positions
         for t, q, name in zip(times, positions, joint_names):
-            axs[0].plot(t, q, label=f"{name} Position")
-        axs[0].set_ylabel("Position (rad)")
+            axs[0].plot(t, q, label=f"{name}")
+        axs[0].set_ylabel("Position (rad)", fontsize=14)
         axs[0].grid()
         axs[0].legend()
 
         # Plot velocities
         for t, dq, name in zip(times, velocities, joint_names):
-            axs[1].plot(t, dq, label=f"{name} Velocity")
-        axs[1].set_ylabel("Velocity (rad/s)")
+            axs[1].plot(t, dq)#, label=f"{name} Velocity")
+        axs[1].set_ylabel("Velocity (rad/s)", fontsize=14)
         axs[1].grid()
         axs[1].legend()
 
         # Plot accelerations
         for t, ddq, name in zip(times, accelerations, joint_names):
-            axs[2].plot(t, ddq, label=f"{name} Acceleration")
-        axs[2].set_ylabel("Acceleration (rad/s^2)")
-        axs[2].set_xlabel("Time (s)")
+            axs[2].plot(t, ddq)#, label=f"{name} Acceleration")
+        axs[2].set_ylabel("Acceleration (rad/s^2)", fontsize=14)
+        axs[2].set_xlabel("Time (s)", fontsize=14)
         axs[2].grid()
         axs[2].legend()
 
@@ -98,8 +99,8 @@ if __name__ == "__main__":
     # Define parameters for the trajectory
     T = 2.0  # Duration of the trajectory in seconds
     num_points = 100  # Number of points in the trajectory
-    initial_thetas = [np.pi / 2, -np.pi / 2]  # Initial joint angles
-    final_thetas = [0, np.pi]  # Final joint angles
+    initial_thetas = [np.pi / 2, -np.pi / 2, 0]  # Initial joint angles
+    final_thetas = [0, np.pi, np.pi/2]  # Final joint angles
 
     # Initialize the TrajectoryGenerator
     trajectory_generator = TrajectoryGenerator(T, num_points)

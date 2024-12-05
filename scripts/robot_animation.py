@@ -32,12 +32,14 @@ COLOR = {
 
 class RobotAnimation:
     
-    def __init__(self, active_chain, passive_chain, duration, n_frames, start_config_passive, end_config, start_config_active):
+    def __init__(self, active_chain, passive_chain, duration, n_frames, start_config_passive, end_config, start_config_active, draw_base_offset):
         
         self.active_chain = active_chain
         self.passive_chain = passive_chain
         self.duration = duration
         self.traj_generator = TrajectoryGenerator(duration=duration,num_points=n_frames)
+
+        self.draw_base_offset = draw_base_offset
         
         self.times, self.passive_trajectory, self.passive_alpha_dot, _, _ = \
             self.traj_generator.generate_joint_trajectories(start_config_passive, end_config)
@@ -82,7 +84,7 @@ class RobotAnimation:
         self.passive_chain.set_configuration(self.passive_trajectory[:,i])
         lines.append(self.passive_chain.draw(self.ax[0], color=COLOR["teal"])[0])
         self.active_chain.set_configuration(self.active_trajectory[:,i])
-        lines.append(self.active_chain.draw(self.ax[0], color=COLOR["salmon"])[0])
+        lines.append(self.active_chain.draw(self.ax[0], color=COLOR["salmon"], offset=self.draw_base_offset)[0])
         
         self.ax[0].set_xlim([-6,6])
         self.ax[0].set_ylim([-6,6])
@@ -138,20 +140,22 @@ if __name__ == "__main__":
     start_config_active = [np.pi/4, np.pi/2, np.pi/4]
     kc1 = ForceKinematicChain(links1, joint_axes1)
     kc1.set_configuration(start_config_active)
-    active_base_offset = G.element([2.1, 0, 0])
-    kc1.set_base_transform(active_base_offset)
+    active_base_offset = np.array([2.05, 0])
+    # kc1.set_base_transform(active_base_offset)
     
     # Create another kinematic chain
     # kc2 = DiffKinematicChain(links1, joint_axes1)
     # start_config_passive = [np.pi/6, np.pi/6, np.pi/6]
-    # desired_config_passive = [np.pi/3, np.pi/4, np.pi/4]
+    # desired_config_passive = [np.pi/2, np.pi/4, np.pi/4]
     start_config_passive = [3*np.pi/4, -np.pi/2, -np.pi/4]
-    desired_config_passive = [np.pi/2, -np.pi/4, -np.pi/4]
+    desired_config_passive = [np.pi/2, -0.05, -np.pi/2]
     kc2 = ForceKinematicChain(links1, joint_axes1, stiffnesses, damping, start_config_passive)
     kc2.set_configuration(start_config_passive)
 
-    robo_animator = RobotAnimation(kc1, kc2, 5, 30, start_config_passive, desired_config_passive, start_config_active)
+    num_frames = 30
+
+    robo_animator = RobotAnimation(kc1, kc2, 5, num_frames, start_config_passive, desired_config_passive, start_config_active, draw_base_offset=active_base_offset)
     
-    ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=30, interval=20, blit=True)
+    ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=num_frames, interval=20, blit=True)
     # plt.show()
     ani.save("test_IK.gif",fps=20)

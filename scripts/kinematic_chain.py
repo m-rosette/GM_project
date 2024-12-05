@@ -23,28 +23,58 @@ class KinematicChain:
         """Set the base transform of the chain"""
         self.base_transform = base_transform
 
+    # def set_configuration(self, joint_angles):
+    #     self.joint_angles = joint_angles
+    #     for i, alpha in enumerate(joint_angles):
+    #         self.joint_transforms[i] = (alpha * self.joint_axes[i]).exp_L
+
+    #     # Update link positions, starting with the base transform
+    #     self.link_positions[0] = self.base_transform * self.joint_transforms[0] * self.links[0]
+    #     for i in range(1, len(self.link_positions)):
+    #         self.link_positions[i] = (
+    #             self.link_positions[i - 1] * self.joint_transforms[i] * self.links[i]
+    #         )
+
+    #     return self.link_positions
     def set_configuration(self, joint_angles):
         self.joint_angles = joint_angles
         for i, alpha in enumerate(joint_angles):
             self.joint_transforms[i] = (alpha * self.joint_axes[i]).exp_L
 
-        # Update link positions, starting with the base transform
-        self.link_positions[0] = self.base_transform * self.joint_transforms[0] * self.links[0]
+        # Update link positions without considering the base transform
+        self.link_positions[0] = self.joint_transforms[0] * self.links[0]
         for i in range(1, len(self.link_positions)):
             self.link_positions[i] = (
                 self.link_positions[i - 1] * self.joint_transforms[i] * self.links[i]
             )
 
+        # Apply the base transform at the end
+        self.link_positions = [
+            self.base_transform * position for position in self.link_positions
+        ]
         return self.link_positions
 
-    def draw(self, ax, color="b"):
-        x = [self.base_transform.value[0]]
-        y = [self.base_transform.value[1]]
+
+    # def draw(self, ax, color="b"):
+    #     x = [self.base_transform.value[0]]
+    #     y = [self.base_transform.value[1]]
+
+    #     for l in self.link_positions:
+    #         x.append(l.value[0])
+    #         y.append(l.value[1])
+    #     line = ax.plot(x, y, marker="o", linestyle="-", color=color)
+    #     ax.set_aspect("equal")
+        
+    #     return line
+
+    def draw(self, ax, color="b", offset=np.array([0, 0])):
+        x = [offset[0]]
+        y = [offset[1]]
 
         for l in self.link_positions:
-            x.append(l.value[0])
-            y.append(l.value[1])
+            x.append(l.value[0] + offset[0])
+            y.append(l.value[1] + offset[1])
+
         line = ax.plot(x, y, marker="o", linestyle="-", color=color)
         ax.set_aspect("equal")
-        
         return line
