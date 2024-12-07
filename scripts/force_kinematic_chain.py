@@ -25,8 +25,8 @@ class ForceKinematicChain(DiffKinematicChain):
         # Call the constructor for the base KinematicChain class
         super().__init__(links, joint_axes)
         
-        self.stiffnesses = np.array(stiffnesses) if stiffnesses else np.zeros(len(joint_axes))
-        self.damping = np.array(damping) if damping else np.zeros(len(joint_axes))
+        self.stiffnesses = np.array(stiffnesses) if stiffnesses else np.zeros((len(joint_axes), 1))
+        self.damping = np.array(damping) if damping else np.zeros((len(joint_axes), 1))
 
         self.start_config = start_config
     
@@ -40,7 +40,8 @@ class ForceKinematicChain(DiffKinematicChain):
         stiffness and damping reaction forces.
         """
         # Inverse dynamics to compute joint space forces from end-effector force
-        F_alpha = np.matmul(F_E, self.Jacobian_Ad_inv(self.dof, 'world'))
+        # F_alpha = np.matmul(F_E, self.Jacobian_Ad_inv(self.dof, 'world'))
+        F_alpha = np.linalg.pinv(self.Jacobian_Ad_inv(self.dof, 'world')) @ F_E
 
         # Reaction forces due to deviation from the current joint configuration
         configuration_deviation = -self.stiffnesses * (desired_config - self.start_config)
@@ -50,7 +51,7 @@ class ForceKinematicChain(DiffKinematicChain):
         joint_reactions = configuration_deviation + damping_reaction
 
         # Combine the joint reaction forces with external forces
-        return F_alpha + joint_reactions
+        return F_alpha + joint_reactions.reshape(-1, 1)
         
     def compute_joint_torques(self, desired_angles, joint_velocities):
         """
@@ -78,7 +79,7 @@ class ForceKinematicChain(DiffKinematicChain):
         D_torque = -self.damping * joint_velocities
 
         # Total torque is the sum of P and D components
-        return P_torque + D_torque
+        return (P_torque + D_torque).reshape(-1, 1)
     
     def equilibrium_end_effector_force(self, desired_angles, joint_velocities):
         """
@@ -89,20 +90,16 @@ class ForceKinematicChain(DiffKinematicChain):
         joint_torques = self.compute_joint_torques(desired_angles, joint_velocities)
         
         # Reaction forces (stiffness and damping)
-        reaction_forces = self.response_forces_with_dynamics(np.zeros_like(joint_torques), desired_angles, joint_velocities)
+        reaction_forces = self.response_forces_with_dynamics(np.zeros((3, 1)), desired_angles, joint_velocities)
         
         # Total joint torques (control + reaction)
         total_joint_torques = joint_torques + reaction_forces
 
         # Compute the Jacobian at the current configuration
-        J_inv = np.linalg.pinv(self.Jacobian_Ad_inv(self.dof, 'world'))
-        
-        # Optional Regularization Step (if needed for ill-conditioned Jacobian)
-        epsilon = 1e-6  # Regularization parameter
-        J_regularized = np.linalg.pinv(J_inv @ J_inv.T + epsilon * np.eye(J_inv.shape[1])) @ J_inv
+        J = self.Jacobian_Ad_inv(self.dof, 'world')
 
-        # Compute end-effector force using the regularized Jacobian
-        F_end_effector = J_regularized @ total_joint_torques
+        # Compute end-effector force 
+        F_end_effector = J @ total_joint_torques
         return F_end_effector
     
     def calculate_end_effector_forces_over_trajectory(self, trajectory, joint_velocities):
@@ -130,74 +127,9 @@ class ForceKinematicChain(DiffKinematicChain):
             )
             
             # Store the result
-            end_effector_forces[:, i] = F_end_effector
+            end_effector_forces[:, i] = F_end_effector.flatten()
 
         return end_effector_forces
-    
-
-    
-    def compute_joint_torques_from_forces(self, end_effector_forces):
-        """
-        Compute joint torques to recreate specified end-effector forces.
-        
-        Args:
-            end_effector_forces (numpy.ndarray): Desired forces at the end-effector.
-
-        Returns:
-            numpy.ndarray: Joint torques to recreate the forces.
-        """
-        J = self.Jacobian_Ad_inv(self.dof, 'world')  # Jacobian for current configuration
-        J_transpose = J.T
-        joint_torques = J_transpose @ end_effector_forces
-        return joint_torques
-    
-    def compute_joint_torques_for_trajectory(self, end_effector_trajectory, joint_trajectory):
-        """
-        Compute joint torques over a trajectory.
-
-        Args:
-            end_effector_trajectory (list): Desired end-effector forces/positions as an array of arrays.
-            joint_trajectory (list): Corresponding joint configurations.
-
-        Returns:
-            numpy.ndarray: Joint torques over the trajectory.
-        """
-        num_steps = len(end_effector_trajectory)
-        joint_torques_trajectory = []
-
-        for i in range(num_steps):
-            # Set the current configuration
-            self.set_configuration(joint_trajectory[i])
-            # Compute joint torques for the given end-effector forces
-            torques = self.compute_joint_torques_from_forces(end_effector_trajectory[i])
-            joint_torques_trajectory.append(torques)
-
-        return np.array(joint_torques_trajectory)
-
-    def compute_inverse_dynamics_torques(self, end_effector_positions, end_effector_velocities, end_effector_forces):
-        """
-        Compute the required joint torques for a trajectory of desired end-effector positions and forces.
-        
-        Args:
-            end_effector_positions (list): Desired positions of the end-effector.
-            end_effector_velocities (list): Desired velocities of the end-effector.
-            end_effector_forces (list): Desired forces at the end-effector.
-
-        Returns:
-            numpy.ndarray: Joint torques over the trajectory.
-        """
-        num_steps = len(end_effector_positions)
-        joint_torques = []
-
-        for i in range(num_steps):
-            # Calculate the current joint angles using inverse kinematics
-            current_angles = self.inverse_kinematics(end_effector_positions[i])
-            self.set_configuration(current_angles)
-            # Map end-effector forces to joint torques
-            torques = self.compute_joint_torques_from_forces(end_effector_forces[i])
-            joint_torques.append(torques)
-
-        return np.array(joint_torques)
 
     
 if __name__ == "__main__":

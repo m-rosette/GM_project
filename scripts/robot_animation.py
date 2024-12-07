@@ -62,14 +62,13 @@ class RobotAnimation:
         
         axes = []
         
-        axes.append(self.fig.add_subplot(1,2,1))
+        axes.append(self.fig.add_subplot(1, 2, 1))
         
         for i in range(self.dof):
             idx = (i+1)*2
-            axes.append(self.fig.add_subplot(self.dof,2,idx))
+            axes.append(self.fig.add_subplot(self.dof, 2, idx))
             
         return axes
-        
 
     def animate(self, i):
         
@@ -86,8 +85,8 @@ class RobotAnimation:
         self.active_chain.set_configuration(self.active_trajectory[:,i])
         lines.append(self.active_chain.draw(self.ax[0], color=COLOR["salmon"], offset=self.draw_base_offset)[0])
         
-        self.ax[0].set_xlim([-6,6])
-        self.ax[0].set_ylim([-6,6])
+        self.ax[0].set_xlim([-3,9])
+        self.ax[0].set_ylim([-2,6])
 
         # Add force arrows for passive chain
         end_effector_position = self.passive_chain.link_positions[-1].value[:2]
@@ -111,7 +110,7 @@ class RobotAnimation:
 
         # Add a legend to show force component labels
         self.ax[0].legend(loc="upper right") 
-    
+
         # Update the joint plots
         for j in range(self.dof):
             self.ax[j+1].clear()
@@ -119,42 +118,67 @@ class RobotAnimation:
                               color=COLOR[color_order[j]])[0])
             lines.append(self.ax[j+1].plot(self.times[i], self.passive_trajectory[j,i],
                               marker = 'o', color=COLOR[color_order[j]])[0])
-                        
             
+            # Adding joint labels on the right side of the subplot
+            self.ax[j+1].text(1.05, 0.5, f'Joint {j+1}', transform=self.ax[j+1].transAxes,
+                             fontsize=12, verticalalignment='center', rotation=90, ha='left')
+
+            # Set x-axis labels only at the bottom subplot
+            if j == self.dof - 1:
+                self.ax[j+1].tick_params(axis='x', labelbottom=True)
+            else:
+                self.ax[j+1].tick_params(axis='x', labelbottom=False)
+
+        # Add x-axis label to the bottom-right subplot
+        self.ax[-1].set_xlabel('Time (s)')
+        self.ax[0].set_xlabel('X')
+        self.ax[0].set_ylabel('Y')
+
+        plt.tight_layout()  
+
         return lines
+
             
 if __name__ == "__main__":
-    # Create a list of three links, all extending in the x direction with different lengths
-    links1 = [G.element([1, 0, 0]), G.element([1, 0, 0]), G.element([1, 0, 0])]
+    # System parameters
+    num_links = 5
+    link_len = 1
+    stiffness = 5
+    damping = 0.1
+    num_frames = 50
+    duration = 5
+
+    # # Three link system
+    # active_base_offset = np.array([2.05, 0]) # used for three link system
+    # start_config_active = [np.pi/4, np.pi/2, np.pi/4]
+    # start_config_passive = [3*np.pi/4, -np.pi/2, -np.pi/4]
+    # desired_config_passive = [np.pi/4, -0.05, -0.05]
+
+    # Five link system
+    active_base_offset = np.array([4.05, 0])
+    start_config_active = [np.pi/4, np.pi/4, np.pi/4, np.pi/4, 0.05]
+    start_config_passive = [3*np.pi/4, -np.pi/4, -np.pi/4, -np.pi/4, -0.05]
+    desired_config_passive = [np.pi/2, -np.pi/8, -np.pi/8, -np.pi/4, -np.pi/4]
+
+    # Create a list of links, all extending in the x direction with different lengths
+    links1 = [G.element([link_len, 0, 0])] * num_links
 
     # Create a list of three joint axes, all in the rotational direction
-    joint_axes1 = [G.Lie_alg_vector([0, 0, 1])] * 3
+    joint_axes1 = [G.Lie_alg_vector([0, 0, 1])] * num_links
 
     # Stiffness and damping for each joint
-    stiffnesses = [5, 5, 5]
-    damping = [0.1, 0.1, 0.1]
+    stiffnesses = [stiffness] * num_links
+    damping = [damping] * num_links
 
     # Create the controllable kinematic chain
-    # kc1 = DiffKinematicChain(links1, joint_axes1)
-    # start_config_active = [np.pi/6, np.pi/6, np.pi/6]
-    start_config_active = [np.pi/4, np.pi/2, np.pi/4]
     kc1 = ForceKinematicChain(links1, joint_axes1)
     kc1.set_configuration(start_config_active)
-    active_base_offset = np.array([2.05, 0])
-    # kc1.set_base_transform(active_base_offset)
     
     # Create another kinematic chain
-    # kc2 = DiffKinematicChain(links1, joint_axes1)
-    # start_config_passive = [np.pi/6, np.pi/6, np.pi/6]
-    # desired_config_passive = [np.pi/2, np.pi/4, np.pi/4]
-    start_config_passive = [3*np.pi/4, -np.pi/2, -np.pi/4]
-    desired_config_passive = [np.pi/2, -0.05, -np.pi/2]
     kc2 = ForceKinematicChain(links1, joint_axes1, stiffnesses, damping, start_config_passive)
     kc2.set_configuration(start_config_passive)
 
-    num_frames = 30
-
-    robo_animator = RobotAnimation(kc1, kc2, 5, num_frames, start_config_passive, desired_config_passive, start_config_active, draw_base_offset=active_base_offset)
+    robo_animator = RobotAnimation(kc1, kc2, duration, num_frames, start_config_passive, desired_config_passive, start_config_active, draw_base_offset=active_base_offset)
     
     ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=num_frames, interval=20, blit=True)
     # plt.show()

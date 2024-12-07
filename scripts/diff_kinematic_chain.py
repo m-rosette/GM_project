@@ -24,6 +24,20 @@ class DiffKinematicChain(kc.KinematicChain):
         self.jacobian_idx = -1  # Starting with an invalid index as this is just a placeholder
         self.dof = len(links)
 
+    def wrap_to_pi(self, angles):
+        """
+        Wrap angles to the range [-pi, pi].
+
+        Args:
+            angles (array-like): Array of joint angles.
+
+        Returns:
+            np.array: Array of wrapped joint angles.
+        """
+        wrapped_angles = (angles + np.pi) % (2 * np.pi) - np.pi
+        # wrapped_angles = angles % (2 * np.pi)
+        return wrapped_angles
+
     def Jacobian_Ad_inv(self, link_index, output_frame='body'):
         """Calculate the Jacobian by using the Adjoint_inverse to transfer velocities from the joints to the links"""
         # Construct Jacobian matrix J as an ndarray of zeros with as many rows as the group has dimensions,
@@ -141,7 +155,9 @@ class DiffKinematicChain(kc.KinematicChain):
             """
             # Check for timeout during the solver's iterations
             if time.time() - start_time > timeout_seconds:
-                raise TimeoutError("ODE solver exceeded the time limit.")
+                raise TimeoutError(f"ODE solver exceeded the {timeout_seconds}s time limit.")
+            
+            y = self.wrap_to_pi(y)
 
             # Set the current configuration for IK
             self.set_configuration(y.flatten().tolist())
