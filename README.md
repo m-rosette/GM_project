@@ -17,10 +17,10 @@ This pipeline was tested on three active/passive chain configurations: two-link 
 
 ##### Results
 *Insufficient* 
-![](https://github.com/m-rosette/GM_project/main/docs/insufficient_two_link.gif)
+![](https://github.com/m-rosette/GM_project/blob/main/docs/insufficient_two_link.gif)
 
 *Sufficient*
-![](https://github.com/m-rosette/GM_project/main/docs/sufficient_three_link.gif)
+![](https://github.com/m-rosette/GM_project/blob/main/docs/sufficient_three_link.gif)
 
 *Redundant*
-![](https://github.com/m-rosette/GM_project/main/docs/redundant_five_link.gif)
+![](https://github.com/m-rosette/GM_project/blob/main/docs/redundant_five_link.gif)
