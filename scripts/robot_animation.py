@@ -85,12 +85,19 @@ class RobotAnimation:
         self.active_chain.set_configuration(self.active_trajectory[:,i])
         lines.append(self.active_chain.draw(self.ax[0], color=COLOR["salmon"], offset=self.draw_base_offset)[0])
         
-        self.ax[0].set_xlim([-3,9])
-        self.ax[0].set_ylim([-2,6])
+        self.ax[0].set_xlim([-3,6])
+        self.ax[0].set_ylim([-1,6])
 
         # Add force arrows for passive chain
-        end_effector_position = self.passive_chain.link_positions[-1].value[:2]
+        end_effector_position_passive = self.passive_chain.link_positions[-1].value[:2]
         force_vector = self.passive_end_effector_forces[:, i]
+
+        # Compute final end effector error between active and passive chains
+        end_effector_position_active = self.active_chain.link_positions[-1].value[:2]
+        summed_error = np.sum(np.linalg.norm(end_effector_position_passive - (end_effector_position_active + self.draw_base_offset)))
+        print(summed_error)
+        # print(f'x error: {end_effector_position_passive[0] - (end_effector_position_active[0] + self.draw_base_offset[0])}')
+        # print(f'y error: {end_effector_position_passive[1] - end_effector_position_active[1]}')
         
         # Colors and components for x and y components
         components = [("x", force_vector[0], 0, "red"), ("y", 0, force_vector[1], "green")]
@@ -98,8 +105,8 @@ class RobotAnimation:
         # Loop through the components and plot arrows
         for comp_name, force_x, force_y, color in components:
             arrow = self.ax[0].quiver(
-                end_effector_position[0],  # Base x position
-                end_effector_position[1],  # Base y position
+                end_effector_position_passive[0],  # Base x position
+                end_effector_position_passive[1],  # Base y position
                 force_x,                   # x-component of force (for 'x' or 'y' direction)
                 force_y,                   # y-component of force (for 'x' or 'y' direction)
                 color=color,
@@ -141,26 +148,32 @@ class RobotAnimation:
             
 if __name__ == "__main__":
     # System parameters
-    num_links = 5
     link_len = 1
     stiffness = 5
     damping = 0.1
     num_frames = 50
     duration = 5
 
+    # Two link system
+    active_base_offset = np.array([1.4142, 0])
+    start_config_active = [np.pi/2, np.pi/4]
+    start_config_passive = [np.pi/2, -np.pi/4]
+    desired_config_passive = [np.pi/4, -0.05]
+
     # # Three link system
-    # active_base_offset = np.array([2.05, 0]) # used for three link system
+    # active_base_offset = np.array([2, 0])
     # start_config_active = [np.pi/4, np.pi/2, np.pi/4]
     # start_config_passive = [3*np.pi/4, -np.pi/2, -np.pi/4]
-    # desired_config_passive = [np.pi/4, -0.05, -0.05]
+    # desired_config_passive = [np.pi/4, -np.pi/4, -0.05]
 
-    # Five link system
-    active_base_offset = np.array([4.05, 0])
-    start_config_active = [np.pi/4, np.pi/4, np.pi/4, np.pi/4, 0.05]
-    start_config_passive = [3*np.pi/4, -np.pi/4, -np.pi/4, -np.pi/4, -0.05]
-    desired_config_passive = [np.pi/2, -np.pi/8, -np.pi/8, -np.pi/4, -np.pi/4]
+    # # Five link system
+    # active_base_offset = np.array([4 - 0.0025, 0])
+    # start_config_active = [np.pi/4, np.pi/4, np.pi/4, np.pi/4, 0.05]
+    # start_config_passive = [3*np.pi/4, -np.pi/4, -np.pi/4, -np.pi/4, -0.05]
+    # desired_config_passive = [np.pi/2, -np.pi/8, -np.pi/8, -np.pi/4, -np.pi/4]
 
     # Create a list of links, all extending in the x direction with different lengths
+    num_links = len(start_config_active)
     links1 = [G.element([link_len, 0, 0])] * num_links
 
     # Create a list of three joint axes, all in the rotational direction
@@ -182,4 +195,4 @@ if __name__ == "__main__":
     
     ani = FuncAnimation(robo_animator.fig, robo_animator.animate, frames=num_frames, interval=20, blit=True)
     # plt.show()
-    ani.save("test_IK.gif",fps=20)
+    ani.save("insufficient_two_link.gif",fps=20)
